@@ -1,0 +1,11 @@
+/* Styling for the jQuery GSBookbar plugin. */
+.empty_gsbb {
+	display: block;
+}
+.empty_gsbb:before {
+	content: 'No matching books found.';
+	display: inline;
+}
+.empty_gsbb .resultsBox_gsbb {
+	display: none;
+}
