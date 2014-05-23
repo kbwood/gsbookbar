@@ -1,184 +1,114 @@
 /* http://keith-wood.name/gsbookbar.html
-   Google Search Bookbar for jQuery v1.1.0.
+   Google Search Bookbar for jQuery v2.0.0.
    See http://www.google.com/uds/solutions/bookbar/reference.html.
    Written by Keith Wood (kbwood{at}iinet.com.au) November 2008.
    Available under the MIT (https://github.com/jquery/jquery/blob/master/MIT-LICENSE.txt) license. 
    Please attribute the author if you use it. */
+   
+(function($) { // hide the namespace
 
-/* Display a Google Search Bookbar.
-   Attach it with options like:
-   $('div selector').gsbookbar({search: ['jquery']});
-*/
+	var pluginName = 'gsbookbar';
 
-(function($) { // Hide scope, no $ conflict
+	/** Create the Google Search Bookbar plugin.
+		<p>Sets a <code>div</code> to display a bookbar.</p>
+		<p>Expects HTML like:</p>
+		<pre>&lt;div>&lt;/div></pre>
+		<p>Provide inline configuration like:</p>
+		<pre>&lt;div data-gsbookbar="name: 'value'">&lt;/div></pre>
+	 	@module GSBookBar
+		@augments JQPlugin
+		@example $(selector).gsbookbar({search: ['jquery']}); */
+	$.JQPlugin.createPlugin({
+	
+		/** The name of the plugin. */
+		name: pluginName,
+		
+		/** Cycle times - very short. */
+		cycleVShort: 3000,
+		/** Cycle times - short. */
+		cycleShort: 10000,
+		/** Cycle times - medium (default). */
+		cycleMedium: 15000,
+		/** Cycle times - long. */
+		cycleLong: 30000,
+		/** Cycle modes - random (default). */
+		cycleRandom: 1,
+		/** Cycle modes - linear. */
+		cycleLinear: 2,
+		/** Thumbnail sizes - small. */
+		thumbnailsSmall: 1,
+		/** Thumbnail sizes - medium (default). */
+		thumbnailsMedium: 2,
+			
+		/** Default settings for the plugin.
+			@property [horizontal=true] {boolean} <code>true</code> for horizontal display, <code>false</code> for vertical.
+			@property [thumbnailSize=this.thumbnailsMedium] {number} The size of the book thumbnails.
+			@property [search='jquery'] {string|string[]} Single or list of search terms.
+			@property [manyResults=false] {boolean} <code>true</code> for many results, <code>false</code> for only a few.
+			@property [cycleTime=this.cycleMedium] {number} Time between cycles of the search terms (milliseconds).
+			@property [cycleMode=this.cycleRandom] {number} Mode of cycling through the search terms. */
+		defaultOptions: {
+			horizontal: true,
+			thumbnailSize: this.thumbnailsMedium,
+			search: 'jquery',
+			manyResults: false,
+			cycleTime: this.cycleMedium,
+			cycleMode: this.cycleRandom
+		},
+		
+		_init: function() {
+			this.defaultOptions.thumbnailSize = this.thumbnailsMedium;
+			this.defaultOptions.cycleTime = this.cycleMedium,
+			this.defaultOptions.cycleMode = this.cycleRandom;
+			this._super();
+		},
 
-/* GSBookbar manager. */
-function GSBookbar() {
-	this._defaults = {
-		horizontal: true, // True for horizontal display, false for vertical
-		thumbnailSize: this.thumbnailsMedium, // The size of the book thumbnails
-		search: 'jquery', // Single or list of search terms
-		manyResults: false, // True for many results, false for only a few
-		cycleTime: this.cycleMedium, // Time between cycles of the search terms
-		cycleMode: this.cycleRandom // Mode of cycling through the search terms
-	};
-}
+		_optionsChanged: function(elem, inst, options) {
+			$.extend(inst.options, options);
+			this._updateGSBookbar(elem[0], inst);
+		},
 
-$.extend(GSBookbar.prototype, {
-	/* Class name added to elements to indicate already configured with GSBookbar. */
-	markerClassName: 'hasGSBookbar',
-	/* Name of the data property for instance settings. */
-	propertyName: 'gsbookbar',
+		/** Redisplay the bookbar with an updated display.
+			@private
+			@param elem {Element} The affected division.
+			@param inst {object} The instance settings. */
+		_updateGSBookbar: function(elem, inst) {
+			var search = inst.options.search;
+			search = ($.isArray(search) ? search : [search]);
+			inst.bookbar = new GSbookBar(elem, {largeResultSet: inst.options.manyResults,
+				horizontal: inst.options.horizontal, thumbnailSize: inst.options.thumbnailSize,
+				autoExecuteList: {executeList: search, cycleTime: inst.options.cycleTime,
+					cycleMode: inst.options.cycleMode}});
+		},
 
-	/* Cycle times. */
-	cycleVShort: 3000,
-	cycleShort: 10000,
-	cycleMedium: 15000, // Default
-	cycleLong: 30000,
-	/* Cycle modes. */
-	cycleRandom: 1, // Default
-	cycleLinear: 2,
-	/* Thumbnail sizes. */
-	thumbnailsSmall: 1,
-	thumbnailsMedium: 2, // Default
-
-	/* Override the default settings for all GSBookbar instances.
-	   @param  options  (object) the new settings to use as defaults
-	   @return  (GSBookbar) this object */
-	setDefaults: function(options) {
-		$.extend(this._defaults, options || {});
-		return this;
-	},
-
-	/* Attach the bookbar widget to a div.
-	   @param  target   (element) the control to affect
-	   @param  options  (object) the custom options for this instance */
-	_attachPlugin: function(target, options) {
-		target = $(target);
-		if (target.hasClass(this.markerClassName)) {
-			return;
-		}
-		var inst = {options: $.extend({}, this._defaults, options), target: target};
-		target.addClass(this.markerClassName).data(this.propertyName, inst);
-		this._optionPlugin(target, options);
-	},
-
-	/* Retrieve or reconfigure the settings for a control.
-	   @param  target   (element) the control to affect
-	   @param  options  (object) the new options for this instance or
-	                    (string) an individual property name
-	   @param  value    (any) the individual property value (omit if options
-	                    is an object or to retrieve the value of a setting)
-	   @return  (any) if retrieving a value */
-	_optionPlugin: function(target, options, value) {
-		target = $(target);
-		var inst = target.data(this.propertyName);
-		if (!options || (typeof options == 'string' && value == null)) { // Get option
-			var name = options;
-			options = (inst || {}).options;
-			return (options && name ? options[name] : options);
-		}
-
-		if (!target.hasClass(this.markerClassName)) {
-			return;
-		}
-		options = options || {};
-		if (typeof options == 'string') {
-			var name = options;
-			options = {};
-			options[name] = value;
-		}
-		$.extend(inst.options, options);
-		this._updateGSBookbar(target[0], inst);
-	},
-
-	/* Redisplay the bookbar with an updated display.
-	   @param  target  (element) the affected division
-	   @param  inst    (object) the instance settings */
-	_updateGSBookbar: function(target, inst) {
-		var search = inst.options.search;
-		search = ($.isArray(search) ? search : [search]);
-		inst.bookbar = new GSbookBar(target, {largeResultSet: inst.options.manyResults,
-			horizontal: inst.options.horizontal, thumbnailSize: inst.options.thumbnailSize,
-			autoExecuteList: {executeList: search, cycleTime: inst.options.cycleTime,
-				cycleMode: inst.options.cycleMode}});
-	},
-
-	/* Perform a new seacrh in the bookbar.
-	   @param  target  (element) the affected division
-	   @param  search  (string) the new search terms */
-	_searchPlugin: function(target, search) {
-		var inst = $.data(target, this.propertyName);
-		if (inst) {
-			$.extend(inst.options, {search: search});
-			inst.bookbar.execute(search);
-		}
-	},
-
-	/* Remove the plugin functionality from a control.
-	   @param  target  (element) the control to affect */
-	_destroyPlugin: function(target) {
-		target = $(target);
-		if (!target.hasClass(this.markerClassName)) {
-			return;
-		}
-		target.removeClass(this.markerClassName).empty().removeData(this.propertyName);
-	}
-});
-
-// The list of commands that return values and don't permit chaining
-var getters = [];
-
-/* Determine whether a command is a getter and doesn't permit chaining.
-   @param  command    (string, optional) the command to run
-   @param  otherArgs  ([], optional) any other arguments for the command
-   @return  true if the command is a getter, false if not */
-function isNotChained(command, otherArgs) {
-	if (command == 'option' && (otherArgs.length == 0 ||
-			(otherArgs.length == 1 && typeof otherArgs[0] == 'string'))) {
-		return true;
-	}
-	return $.inArray(command, getters) > -1;
-}
-
-/* Attach the GSBookbar functionality to a jQuery selection.
-   @param  options  (object) the new settings to use for these instances (optional) or
-                    (string) the command to run (optional)
-   @return  (jQuery) for chaining further calls or
-            (any) getter value */
-$.fn.gsbookbar = function(options) {
-	var otherArgs = Array.prototype.slice.call(arguments, 1);
-	if (isNotChained(options, otherArgs)) {
-		return plugin['_' + options + 'Plugin'].apply(plugin, [this[0]].concat(otherArgs));
-	}
-	return this.each(function() {
-		if (typeof options == 'string') {
-			if (!plugin['_' + options + 'Plugin']) {
-				throw 'Unknown command: ' + options;
+		/** Perform a new search in the bookbar.
+			@param elem {Element} The affected division.
+			@param search {string} The new search terms. */
+		search: function(elem, search) {
+			var inst = this._getInst(elem);
+			if (inst) {
+				$.extend(inst.options, {search: search});
+				inst.bookbar.execute(search);
 			}
-			plugin['_' + options + 'Plugin'].apply(plugin, [this].concat(otherArgs));
-		}
-		else {
-			plugin._attachPlugin(this, options || {});
+		},
+
+		_preDestroy: function(elem, inst) {
+			elem.empty();
 		}
 	});
-};
 
-// Add required external files - note: key must be set before loading this module
-if ($('script[src*="www.google.com/uds/api?file=uds.js"]').length == 0) {
-	if (!$.googleSearchKey) {
-		throw 'Missing Google Search Key';
+	// Add required external files - note: key must be set before loading this module
+	if ($('script[src*="www.google.com/uds/api?file=uds.js"]').length === 0) {
+		if (!$.googleSearchKey) {
+			throw 'Missing Google Search Key';
+		}
+		document.write('<script type="text/javascript" src="http://www.google.com/uds/' +
+			'api?file=uds.js&v=1.0&key=' + $.googleSearchKey + '"></script>\n' +
+			'<link type="text/css" href="http://www.google.com/uds/css/gsearch.css" rel="stylesheet"/>\n');
 	}
 	document.write('<script type="text/javascript" src="http://www.google.com/uds/' +
-		'api?file=uds.js&v=1.0&key=' + $.googleSearchKey + '"></script>\n' +
-		'<link type="text/css" href="http://www.google.com/uds/css/gsearch.css" rel="stylesheet"/>\n');
-}
-document.write('<script type="text/javascript" src="http://www.google.com/uds/' +
-	'solutions/bookbar/gsbookbar.js"></script>\n' +
-	'<link type="text/css" href="http://www.google.com/uds/solutions/bookbar/gsbookbar.css" ' +
-	'rel="stylesheet"/>\n');
-
-/* Initialise the GSBookbar functionality. */
-var plugin = $.gsbookbar = new GSBookbar(); // Singleton instance
+		'solutions/bookbar/gsbookbar.js"></script>\n' +
+		'<link type="text/css" href="http://www.google.com/uds/solutions/bookbar/gsbookbar.css" ' +
+		'rel="stylesheet"/>\n');
 
 })(jQuery);
